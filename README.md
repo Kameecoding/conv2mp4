@@ -1,8 +1,8 @@
 # conv2mp4-ps
-Powershell script that recursively searches through a defined file path and converts MKV, AVI, FLV, and MPEG files to MP4 using ffmpeg (with AAC audio). It then refreshes a Plex library, and deletes the source file upon success. Fails over to Handbrake encode if conversion failure is detected. The purpose of this script is to reduce the number of transcodes performed by a Plex server.<br><br>
+Powershell script that recursively searches through a defined file path and converts MKV, AVI, FLV, and MPEG files to MP4 using handbrake (with AC3 audio). It then refreshes a Plex library, and deletes the source file upon success. Fails over to Handbrake encode if conversion failure is detected. The purpose of this script is to reduce the number of transcodes performed by a Plex server.<br><br>
 <b><u>Dependencies</u></b><br>
 This script requires Filebot, ffmpeg and Handbrake to be installed on your computer. You can download them from here:<br>
-<a href="https://www.filebot.net/#download">FileBot</a><br><br>
+<a href="https://www.filebot.net/#download">FileBot</a><br>
 <a href="https://ffmpeg.org/download.html">ffmpeg</a><br>
 <a href="https://handbrake.fr/downloads.php">Handbrake</a><br><br>
 <b>Usage</b><br>
@@ -19,7 +19,11 @@ There are several user-defined variables you will need to edit using notepad or 
 <b>$ffmpeg</b> = path to ffmpeg.exe<br>
 <b>$handbrake</b> = path to HandBrakeCLI.exe <br>
 <b>$filebot</b> = path to FileBot.exe <br>
-<b>$filebot</b> = path to FileBot.exe <br>
-<b>$filebot</b> = path to FileBot.exe <br>
-<b>$filebot</b> = path to FileBot.exe <br><b>$filebot</b> = path to FileBot.exe <br><b>$filebot</b> = path to FileBot.exe <br>
+<b>$langPattern</b> = path to FileBot.exe <br>
+
+<b>Target Folders for converted files</b>
+<b>$movieTarget</b> = Path where you want your movies<br>
+<b>$tvShowTarget</b> = Path where you want your TV SHows<br>
+<b>$langMovieTarget</b> = Path where you want your different language movies<br>
+<b>$langTVShowTarget</b> = Path where you want your different langue Tv Shows<br>
 
