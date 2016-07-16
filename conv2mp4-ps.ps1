@@ -24,45 +24,78 @@ $plexToken = your Plex server's token (for the purpose of refreshing its library
 -Plex server token - See https://support.plex.tv/hc/en-us/articles/204059436-Finding-your-account-token-X-Plex-Token
 --Plex server token is also easy to retrive with Couchpotato or SickRage 
 $ffmpeg = path to ffmpeg.exe
-$handbrake = path to HandBrakeCLI.exe #>
-$mediaPath = "Z:\media"
-$fileTypes = "*.mkv", "*.avi", "*.flv", "*.mpeg"
+$handbrake = path to HandBrakeCLI.exe
+$filebot = path to filebot.exe#>
+$mediaPath = "Path to media to be converted"
+$fileTypes = "*.mkv", "*.avi", "*.flv", "*.mpeg", "*.wmv"
 $log = "C:\Users\$env:username\Desktop\conv2mp4-ps.log"
-$plexIP = 'yourplexip:32400'
-$plexToken = 'yourplextoken'
+$plexIP = '127.0.0.1:32400'
+$plexToken = 'E7fkftT944mGMSrVZr5d'
 $ffmpeg = "C:\ffmpeg\bin\ffmpeg.exe"
 $handbrake = "C:\Program Files\HandBrake\HandBrakeCLI.exe"
+$fileBot = "C:\Program Files\FileBot\filebot.exe"
+$tvShowPattern1 = "s[0-1][0-9]"
+$tvShowPattern2	= "[1-9]x[0-9][0-9]"
+$langPattern = "hun"
+$movieTarget = "Path where you want your movies"
+$langMovieTarget = "Path where you want your different language movies"
+$tvShowTarget = "Path where you want your TV SHows"
+$langTVShowTarget = "Path where you want your different langue Tv Shows"
 
 <#----------------------------------------------------------------------------------
-Other variables
+	Rename Files using Filebot,
+	looks for patterns in the name to determine if it's a TV Show or a Movie
 ----------------------------------------------------------------------------------#>
-$mPath = Get-Item -Path $mediaPath
-$fileList = Get-ChildItem "$($mPath.FullName)\*" -i $fileTypes -recurse
-$num = $fileList | measure
-$fileCount = $num.count
-$time = {Get-Date -format "MM/dd/yy HH:mm:ss"}
+function RenameFiles {
 	
-<#----------------------------------------------------------------------------------
-Begin search loop 
-----------------------------------------------------------------------------------#>
-$i = 0;
-ForEach ($file in $fileList)
-{
-	$i++;
-	$oldFile = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
-	$newFile = $file.DirectoryName + "\" + $file.BaseName + ".mp4";
-	$plexURL = "http://$plexIP/library/sections/all/refresh?X-Plex-Token=$plexToken"
-	$progress = ($i / $fileCount) * 100
-	$progress = [Math]::Round($progress,2)
+	$mPath = Get-Item -Path $mediaPath
+	$fileList = Get-ChildItem "$($mPath.FullName)\*" -i $fileTypes -recurse
 	
-	<#----------------------------------------------------------------------------------
-	Do work
-	----------------------------------------------------------------------------------#>
-	Clear-Host
-	Write-Output "------------------------------------------------------------------------------------" | Out-File $log -Append
-	Write-Output "$($time.Invoke()) Processing - $oldFile" | Out-File $log -Append
-	Write-Output "$($time.Invoke()) File $i of $fileCount - $progress%" | Out-File $log -Append
+	ForEach ($file in $fileList)
+	{
+		$fbarg1 = "-rename"
+		$fbarg2 = $file.FullName
+		$fbarg3 = "--db"
+		$fbarg4 = ""
+		$fbarg5 = "-non-strict"
+		
+		if($file.FullName -like "*$tvShowPattern1*" -Or $file.FullName -like "*$tvShowPattern2*"){
+			$fbarg4 = "TheTVDB"
+		}else {	
+			$fbarg4 = "TheMovieDB"
+		}
+		
+		$fbargs = @($fbarg1, $fbarg2, $fbarg3, $fbarg4, $fbarg5)
+		$fbcmd = &$filebot $fbargs
+
+		$fbcmd
+	}
+}
+
+function GetFileDifference([string]$oldFile,[string]$newFile){
+	$LengthColumn = 27
+	$shell = New-Object -ComObject Shell.Application 
+	$folder = $folder = Split-Path $oldFile
+	$shellfolder = $shell.Namespace($folder)
+	$old = Split-Path $oldFile -Leaf
+	$new = Split-Path $newFile -Leaf
+	$fileOld = $shellfolder.ParseName($old)
+	$oldLength = $shellfolder.GetDetailsOf($fileOld, $LengthColumn)
+	$shellfolder = $shell.Namespace($file.DirectoryName)
+	$fileNew = $shellfolder.ParseName($new)
+	$newLength = $shellfolder.GetDetailsOf($fileNew, $LengthColumn)
 	
+	$Difference = ([timespan]$oldLength).Subtract([timespan]$newLength).Duration().TotalSeconds
+	
+	return $Difference
+}
+
+function ffmpegFallback([string]$oldFile,[string]$newFile){
+	
+	Remove-Item $newFile -Force
+	Write-Output "$($time.Invoke()) EXCEPTION: New file is over 25% smaller ($($diffErr)MB). $newFile deleted." | Out-File $log -Append
+	Write-Output "$($time.Invoke()) FAILOVER: Re-encoding $oldFile with Handbrake." | Out-File $log -Append
+		
 	<#----------------------------------------------------------------------------------
 	ffmpeg variables
 	----------------------------------------------------------------------------------#>
@@ -71,109 +104,141 @@ ForEach ($file in $fileList)
 	$ffarg3 = "+genpts"
 	$ffarg4 = "-i"
 	$ffarg5 = "$oldFile"
-	$ffarg6 = "-vcodec"
-	$ffarg7 = "copy"
-	$ffarg8 = "-acodec"
-	$ffarg9 = "aac"
-	$ffarg10 = "$newFile"
-	$ffargs = @($ffarg1, $ffarg2, $ffarg3, $ffarg4, $ffarg5, $ffarg6, $ffarg7, $ffarg8, $ffarg9, $ffarg10)
+	$ffarg6 = "-map"
+	$ffarg7 = "0"
+	$ffarg8 = "-vcodec"
+	$ffarg9 = "copy"
+	$ffarg13 = "-scodec"
+	$ffarg14 = "mov_text"
+	$ffarg10 = "-acodec"
+	$ffarg11 = "aac"
+	$ffarg12 = "$newFile"
+
+	$ffargs = @($ffarg1, $ffarg2, $ffarg3, $ffarg4, $ffarg5, $ffarg6, $ffarg7, $ffarg8, $ffarg9, $ffarg13, $ffarg14, $ffarg10, $ffarg11, $ffarg12)
 	$ffcmd = &$ffmpeg $ffargs
 	
 	<#----------------------------------------------------------------------------------
 	Begin ffmpeg conversion (lossless)
 	-----------------------------------------------------------------------------------#>
 	$ffcmd
-	Write-Output "$($time.Invoke()) ffmpeg completed" | Out-File $log -Append
+	Write-Output "$($time.Invoke()) ffmpeg completed" | Out-File $log -Append	
 
+}
+
+function MoveFileToPlex([string]$newFile){
 	<#----------------------------------------------------------------------------------
-	Refresh Plex libraries in Chrome
-	-----------------------------------------------------------------------------------#>
-	Invoke-WebRequest $plexURL 
-	Write-Output "$($time.Invoke()) Plex library refreshed" | Out-File $log -Append #>
+	Check if it's a TV Show or movie
+	Then check if it's Hungarian or not.
+	----------------------------------------------------------------------------------#>
+	$fileTarget = ""
+	$fileName = Split-Path $newFile -Leaf
+	Write-Host $newFile
+	if($newFile -like "*$tvShowPattern1*" -Or $newFile -like "*$tvShowPattern2*") {
+		if($newFile -like "*$langPattern*"){
+			$fileTarget = $langTVShowTarget + "\"
+		}else{
+			$fileTarget = $tvShowTarget + "\"
+		}
+		$showFolder = $filename.split("-").trim()
+		$showFolder = $showFolder[0].Trim()
+		$fileTarget = $fileTarget + $showFolder
+		Write-Host $fileTarget
+		if( -Not(Test-Path $fileTarget)){
+			New-Item -ItemType directory -Path $fileTarget
+		}
+	} else {
+		if($newFile -like "*$langPattern*"){
+			$fileTarget = $movieTarget + "\"
+		}else{
+			$fileTarget = $langMovieTarget + "\"
+		}
+	}
+	$fileTarget = $fileTarget + "\" + $fileName
+	Move-Item $newFile $fileTarget
+}
+
+
+function ConvertWithHandbrake {	
+	<#----------------------------------------------------------------------------------
+	Variables
+	----------------------------------------------------------------------------------#>
+	$mPath = Get-Item -Path $mediaPath
+	$fileList = Get-ChildItem "$($mPath.FullName)\*" -i $fileTypes -recurse
+	$num = $fileList | measure
+	$fileCount = $num.count
+	$time = {Get-Date -format "MM/dd/yy HH:mm:ss"}
 		
 	<#----------------------------------------------------------------------------------
-	Begin file comparison between old file and new file to determine conversion success
-	-----------------------------------------------------------------------------------#>
-	# Load files for comparison
-	$fileOld = Get-Item $oldFile
-	$fileNew = Get-Item $newFile
-			
-	# If new file is the same size as old file, log status and delete old file
-	If ($fileNew.length -eq $fileOld.length) 
-		{
+	Begin search loop 
+	----------------------------------------------------------------------------------#>
+	$i = 0;
+	ForEach ($file in $fileList)
+	{
+		$i++;
+		$oldFile = $file.DirectoryName + "\" + $file.BaseName + $file.Extension;
+		$newFile = $file.DirectoryName + "\" + $file.BaseName + ".mp4";
+		$plexURL = "http://$plexIP/library/sections/all/refresh?X-Plex-Token=$plexToken"
+		$progress = ($i / $fileCount) * 100
+		$progress = [Math]::Round($progress,2)
+		
+		<#----------------------------------------------------------------------------------
+		Do work
+		----------------------------------------------------------------------------------#>
+		Clear-Host
+		Write-Output "------------------------------------------------------------------------------------" | Out-File $log -Append
+		Write-Output "$($time.Invoke()) Processing - $oldFile" | Out-File $log -Append
+		Write-Output "$($time.Invoke()) File $i of $fileCount - $progress%" | Out-File $log -Append
+		
+		<#----------------------------------------------------------------------------------
+		Refresh Plex libraries in Chrome
+		-----------------------------------------------------------------------------------#>
+		Invoke-WebRequest $plexURL 
+		Write-Output "$($time.Invoke()) Plex library refreshed" | Out-File $log -Append 
+		
+		# Begin Handbrake encode (lossy)
+		# Handbrake CLI: https://trac.handbrake.fr/wiki/CLIGuide#presets
+		
+		<#----------------------------------------------------------------------------------
+		HandbrakeCLI variables
+		----------------------------------------------------------------------------------#>
+		$hbarg1 = "-i"
+		$hbarg2 = "$oldFile"
+		$hbarg3 = "-o"
+		$hbarg4 = "$newFile"
+		$hbarg5 = "-f"
+		$hbarg6 = "mp4"
+		$hbarg7 = "--preset=High Profile"
+		$hbarg8 = "--verbose=1"
+		$hbarg9 = "-s"
+		$hbarg10 = "1,2,3,4"
+		$hbarg11 = "-a"
+		$hbarg12 = "1,2,3,4"
+		$hbargs = @($hbarg1, $hbarg2, $hbarg3, $hbarg4, $hbarg5, $hbarg6, $hbarg7, $hbarg8, $hbarg9, $hbarg10, $hbarg11, $hbarg12)
+		$hbcmd = &$handbrake $hbargs
+
+		$hbcmd
+		Write-Output "$($time.Invoke()) Handbrake finished." | Out-File $log -Append
+		
+		<#----------------------------------------------------------------------------------
+		Check Difference in file length
+		if it's greater than 5 seconds, fallback to ffmpeg
+		----------------------------------------------------------------------------------#>
+		$fileDifference = GetFileDifference $oldFile $newFile
+		
+		if($fileDifference -gt 5 -Or $fileDifference -lt -5){
+			ffmpegFallback $oldFile $newFile
+		}else{
 			Remove-Item $oldFile -Force
-			Write-Output "$($time.Invoke()) Same file size ($($fileNew.length)MB). $oldFile deleted." | Out-File $log -Append
+			Write-Output "$($time.Invoke()) Same file duration $oldFile deleted." | Out-File $log -Append
 		}
-			
-	# If new file is larger than old file, log status and delete old file
-	Elseif ($fileNew.length -gt $fileOld.length) 
-		{
-			$diffGT = [Math]::Round($fileNew.length-$fileOld.length)/1MB -as [int]
-			Remove-Item $oldFile -Force
-			Write-Output "$($time.Invoke()) New file is $($diffGT)MB larger. $oldFile deleted." | Out-File $log -Append
-		}
-			
-	# If new file is much smaller than old file (indicating a failed conversion), log status, delete new file, and re-encode with HandbrakeCLI
-	Elseif ($fileNew.length -lt ($fileOld.length * .75) )
-		{
-			$diffErr = [Math]::Round($fileNew.length-$fileOld.length)/1MB -as [int]
-			Remove-Item $newFile -Force
-			Write-Output "$($time.Invoke()) EXCEPTION: New file is over 25% smaller ($($diffErr)MB). $newFile deleted." | Out-File $log -Append
-			Write-Output "$($time.Invoke()) FAILOVER: Re-encoding $oldFile with Handbrake." | Out-File $log -Append
-				# Begin Handbrake encode (lossy)
-				# Handbrake CLI: https://trac.handbrake.fr/wiki/CLIGuide#presets
-				
-				<#----------------------------------------------------------------------------------
-				HandbrakeCLI variables
-				----------------------------------------------------------------------------------#>
-				$hbarg1 = "-i"
-				$hbarg2 = "$oldFile"
-				$hbarg3 = "-o"
-				$hbarg4 = "$newFile"
-				$hbarg5 = "-f"
-				$hbarg6 = "mp4"
-				$hbarg7 = "--loose-anamorphic"
-				$hbarg8 = "--modulus"
-				$hbarg9 = "2"
-				$hbarg10 = "-e"
-				$hbarg11 = "x264"
-				$hbarg12 = "-q"
-				$hbarg13 = "19"
-				$hbarg14 = "--cfr"
-				$hbarg15 = "-a"
-				$hbarg16 = "1"
-				$hbarg17 = "-E"
-				$hbarg18 = "faac"
-				$hbarg19 = "-6"
-				$hbarg20 = "dp12"
-				$hbarg21 = "-R"
-				$hbarg22 = "Auto"
-				$hbarg23 = "-B"
-				$hbarg24 = "320"
-				$hbarg25 = "-D"
-				$hbarg26 = "0"
-				$hbarg27 = "--gain"
-				$hbarg28 = "0"
-				$hbarg29 = "--audio-copy-mask"
-				$hbarg30 = "none"
-				$hbarg31 = "--audio-fallback"
-				$hbarg32 = "ffac3"
-				$hbarg33 = "-x"
-				$hbarg34 = "level=4.0:ref=16:bframes=16:b-adapt=2:direct=auto:me=tesa:merange=24:subq=11:rc-lookahead=60:analyse=all:trellis=2:no-fast-pskip=1"
-				$hbarg35 = "--verbose=1"
-				$hbargs = @($hbarg1, $hbarg2, $hbarg3, $hbarg4, $hbarg5, $hbarg6, $hbarg7, $hbarg8, $hbarg9, $hbarg10, $hbarg11, $hbarg12, $hbarg13, $hbarg14, $hbarg15, $hbarg16, $hbarg17, $hbarg18, $hbarg19, $hbarg20, $hbarg21, $hbarg22, $hbarg23, $hbarg24, $hbarg25, $hbarg26, $hbarg27, $hbarg28, $hbarg29, $hbarg30, $hbarg31, $hbarg32, $hbarg33, $hbarg34, $hbarg35)
-				$hbcmd = &$handbrake $hbargs
-	
-					$hbcmd
-					Write-Output "$($time.Invoke()) Handbrake finished." | Out-File $log -Append
-					Write-Output "$($time.Invoke()) $oldFile deleted." | Out-File $log -Append
-		}
-			
-	# If new file is smaller than old file, log status and delete old file
-	Elseif ($fileNew.length -lt $fileOld.length)
-		{
-			$diffLT = [Math]::Round($fileOld.length-$fileNew.length)/1MB -as [int]
-			Remove-Item $oldFile -Force
-			Write-Output "$($time.Invoke()) New file is $($diffLT)MB smaller. $oldFile deleted." | Out-File $log -Append
-		}		
-}		
+		
+		MoveFileToPlex $newFile
+	}
+}
+
+<#----------------------------------------------------------------------------------
+Rename Files
+----------------------------------------------------------------------------------#>
+RenameFiles
+ConvertWithHandbrake
+
