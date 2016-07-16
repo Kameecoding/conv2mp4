@@ -21,7 +21,7 @@ There are several user-defined variables you will need to edit using notepad or 
 <b>$filebot</b> = path to FileBot.exe <br>
 <b>$langPattern</b> = path to FileBot.exe <br>
 
-<b>Target Folders for converted files</b>
+<b>Target Folders for converted files</b> <br>
 <b>$movieTarget</b> = Path where you want your movies<br>
 <b>$tvShowTarget</b> = Path where you want your TV SHows<br>
 <b>$langMovieTarget</b> = Path where you want your different language movies<br>
